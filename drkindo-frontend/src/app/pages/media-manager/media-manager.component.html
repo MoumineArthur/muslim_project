@@ -1,0 +1,78 @@
+<div class="p-6 text-white min-h-screen bg-gray-900">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">Gestionnaire de Médias</h1>
+    <button (click)="checkDuplicates()" class="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded text-sm font-medium transition">
+      Vérifier les doublons
+    </button>
+  </div>
+
+  <div *ngIf="duplicates" class="mb-6 p-4 bg-yellow-900/50 border border-yellow-700 rounded">
+    <h2 class="text-xl font-bold text-yellow-500 mb-2">⚠️ Doublons détectés</h2>
+    <div *ngFor="let entry of duplicates | keyvalue" class="mb-2">
+      <span class="text-sm text-gray-400">Hash: {{ entry.key | slice:0:10 }}...</span>
+      <ul class="list-disc ml-5 text-sm">
+        <li *ngFor="let m of entry.value">{{ m.filename }} (ID: {{m.id}})</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="bg-gray-800 rounded-lg shadow overflow-hidden">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-gray-700 text-gray-300">
+        <tr>
+          <th class="p-4">Fichier</th>
+          <th class="p-4">Dossier</th>
+          <th class="p-4">Statut</th>
+          <th class="p-4">Durée</th>
+          <th class="p-4">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-700">
+        <tr *ngFor="let media of mediaPage?.content" class="hover:bg-gray-700/50 transition">
+          <td class="p-4">
+            <div class="font-medium truncate max-w-xs" [title]="media.filename">{{ media.filename }}</div>
+            <div class="text-xs text-gray-400">{{ (media.size / 1024 / 1024).toFixed(2) }} MB</div>
+          </td>
+          <td class="p-4 text-gray-300">{{ media.folder?.name || 'Racine' }}</td>
+          <td class="p-4">
+            <span class="px-2 py-1 text-xs rounded-full font-medium"
+              [ngClass]="{
+                'bg-blue-900 text-blue-300': media.status === 'NEW',
+                'bg-yellow-900 text-yellow-300': media.status === 'ANALYZED',
+                'bg-green-900 text-green-300': media.status === 'PUBLISHED'
+              }">
+              {{ media.status }}
+            </span>
+          </td>
+          <td class="p-4 text-gray-400">{{ formatDuration(media.durationMs) }}</td>
+          <td class="p-4 flex gap-2">
+            <button *ngIf="media.status === 'NEW'" (click)="analyze(media)" 
+              class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs transition">
+              Analyser
+            </button>
+            <a *ngIf="media.status === 'ANALYZED' || media.status === 'PUBLISHED'" 
+              [routerLink]="['/post/new']" [queryParams]="{ mediaId: media.id }"
+              class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs transition inline-block">
+              Créer un Post
+            </a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div *ngIf="mediaPage?.content?.length === 0" class="p-8 text-center text-gray-400">
+      Aucun média trouvé.
+    </div>
+  </div>
+
+  <div class="flex justify-between items-center mt-4" *ngIf="mediaPage">
+    <button [disabled]="mediaPage.first" (click)="loadMedia(mediaPage.number - 1)"
+      class="px-4 py-2 bg-gray-800 disabled:opacity-50 rounded hover:bg-gray-700 transition">
+      Précédent
+    </button>
+    <span class="text-sm text-gray-400">Page {{ mediaPage.number + 1 }} sur {{ mediaPage.totalPages }}</span>
+    <button [disabled]="mediaPage.last" (click)="loadMedia(mediaPage.number + 1)"
+      class="px-4 py-2 bg-gray-800 disabled:opacity-50 rounded hover:bg-gray-700 transition">
+      Suivant
+    </button>
+  </div>
+</div>
