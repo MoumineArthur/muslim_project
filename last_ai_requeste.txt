@@ -1,0 +1,1 @@
+lorsque je commence la lecture d'un fichier a partir de la page explorer, je voudrais que lorsque je revient sur home, la lecture se positionne sur le fichier en cours de lecture. Actuelement les deux lecteur se superpose et lis deux fichiers en meme temps. Aussi , sur le lecteur dans la page home, repprendre les button de commande contenu dans le lecteur global
