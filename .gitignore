@@ -45,5 +45,5 @@ Thumbs.db
 .env.local
 
 # --- Dossiers contenant les données ---
-drkindo/
-cleaner/
+/drkindo/
+/cleaner/
