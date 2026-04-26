@@ -1,11 +1,12 @@
-import { Injectable, OnDestroy } from '@angular/core';
-import { Router, NavigationStart, Event as RouterEvent } from '@angular/router';
-import { filter } from 'rxjs/operators';
-import { Media } from '../models/models';
-import { MediaService } from './media.service';
+import { Injectable, OnDestroy } from "@angular/core";
+import { Router, NavigationStart, Event as RouterEvent } from "@angular/router";
+import { BehaviorSubject } from "rxjs";
+import { filter } from "rxjs/operators";
+import { Media } from "../models/models";
+import { MediaService } from "./media.service";
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: "root",
 })
 export class AudioPlayerService implements OnDestroy {
   audio = new Audio();
@@ -22,10 +23,13 @@ export class AudioPlayerService implements OnDestroy {
   previousVolume = 1;
 
   playlist: Media[] = [];
+  minimized = false;
+  currentRoute = "home";
+  currentMedia$ = new BehaviorSubject<Media | null>(null);
 
   constructor(
     private mediaService: MediaService,
-    private router: Router
+    private router: Router,
   ) {
     this.initAudioListeners();
     this.loadPersistedSettings();
@@ -33,13 +37,15 @@ export class AudioPlayerService implements OnDestroy {
   }
 
   private initAudioListeners() {
-    this.audio.addEventListener('timeupdate', () => {
+    this.audio.addEventListener("timeupdate", () => {
       this.currentTime = this.audio.currentTime;
       this.duration = this.audio.duration || 0;
-      this.miniProgress = this.duration ? (this.currentTime / this.duration) * 100 : 0;
+      this.miniProgress = this.duration
+        ? (this.currentTime / this.duration) * 100
+        : 0;
     });
 
-    this.audio.addEventListener('ended', () => {
+    this.audio.addEventListener("ended", () => {
       if (this.isLooping) {
         this.audio.currentTime = 0;
         this.audio.play();
@@ -50,58 +56,100 @@ export class AudioPlayerService implements OnDestroy {
   }
 
   private loadPersistedSettings() {
-    const savedVolume = localStorage.getItem('player_volume');
+    const savedVolume = localStorage.getItem("player_volume");
     if (savedVolume !== null) {
       this.volume = parseFloat(savedVolume);
       this.previousVolume = this.volume > 0 ? this.volume : 1;
       this.audio.volume = this.volume;
     }
 
-    const savedMuted = localStorage.getItem('player_muted');
+    const savedMuted = localStorage.getItem("player_muted");
     if (savedMuted !== null) {
-      this.isMuted = savedMuted === 'true';
+      this.isMuted = savedMuted === "true";
       if (this.isMuted) {
         this.audio.volume = 0;
       }
     }
 
-    const savedRate = localStorage.getItem('player_rate');
+    const savedRate = localStorage.getItem("player_rate");
     if (savedRate !== null) {
       this.playbackRate = parseFloat(savedRate);
       this.audio.playbackRate = this.playbackRate;
     }
 
-    const savedLoop = localStorage.getItem('player_loop');
+    const savedLoop = localStorage.getItem("player_loop");
     if (savedLoop !== null) {
-      this.isLooping = savedLoop === 'true';
+      this.isLooping = savedLoop === "true";
     }
   }
 
   private listenToRouter() {
-    this.router.events.pipe(
-      filter((event: RouterEvent): event is NavigationStart => event instanceof NavigationStart)
-    ).subscribe((event: NavigationStart) => {
-      // Si on change de page et que c'est une vidéo qui joue, on coupe le lecteur.
-      if (this.playing?.type === 'VIDEO') {
-        this.stop();
-      }
-    });
+    this.router.events
+      .pipe(
+        filter(
+          (event: RouterEvent): event is NavigationStart =>
+            event instanceof NavigationStart,
+        ),
+      )
+      .subscribe((event: NavigationStart) => {
+        // Extraire la route actuelle
+        const urlParts = event.url.split("?")[0].split("/");
+        this.currentRoute = urlParts[1] || "home"; // 'home', 'explorer', etc.
+
+        // Si on navigue vers explorer et une audio joue : minimiser
+        if (
+          this.currentRoute === "explorer" &&
+          this.playing?.type === "AUDIO"
+        ) {
+          this.minimized = true;
+        }
+        // Si on navigue vers home et une audio joue : agrandir (pas minimisé)
+        else if (
+          this.currentRoute === "home" &&
+          this.playing?.type === "AUDIO"
+        ) {
+          this.minimized = false;
+        }
+        // Si vidéo : toujours arrêter
+        if (this.playing?.type === "VIDEO") {
+          this.stop();
+          this.minimized = false;
+        }
+      });
+  }
+
+  minimize() {
+    this.minimized = true;
+  }
+
+  expand() {
+    this.minimized = false;
   }
 
   playMedia(media: Media, currentPlaylist: Media[]) {
     this.playlist = currentPlaylist || [];
-    
+
     if (this.playing?.id === media.id) {
       this.toggleAudio();
       return;
     }
-    
+
     this.audio.src = this.mediaService.getStreamUrl(media.id);
     this.audio.volume = this.isMuted ? 0 : this.volume;
     this.audio.playbackRate = this.playbackRate;
-    this.audio.play().catch(e => console.error("Playback error", e));
+    this.audio.play().catch((e) => console.error("Playback error", e));
     this.playing = media;
     this.isPlaying = true;
+    this.currentMedia$.next(this.playing);
+
+    // Minimiser automatiquement si on est dans explorer
+    if (this.currentRoute === "explorer") {
+      this.minimized = true;
+    }
+    // Sinon (home ou autre) : ne pas minimiser
+    else {
+      this.minimized = false;
+    }
   }
 
   toggleAudio() {
@@ -115,11 +163,12 @@ export class AudioPlayerService implements OnDestroy {
     this.audio.currentTime = 0;
     this.playing = null;
     this.isPlaying = false;
+    this.currentMedia$.next(null);
   }
 
   prevTrack() {
     if (!this.playlist.length) return;
-    const idx = this.playlist.findIndex(m => m.id === this.playing?.id);
+    const idx = this.playlist.findIndex((m) => m.id === this.playing?.id);
     if (idx > 0) {
       this.playMedia(this.playlist[idx - 1], this.playlist);
     }
@@ -127,7 +176,7 @@ export class AudioPlayerService implements OnDestroy {
 
   nextTrack() {
     if (!this.playlist.length) return;
-    const idx = this.playlist.findIndex(m => m.id === this.playing?.id);
+    const idx = this.playlist.findIndex((m) => m.id === this.playing?.id);
     if (idx !== -1 && idx < this.playlist.length - 1) {
       this.playMedia(this.playlist[idx + 1], this.playlist);
     }

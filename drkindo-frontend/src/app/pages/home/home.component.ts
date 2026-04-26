@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, HostListener } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { RouterModule } from "@angular/router";
 import { MatIconModule } from "@angular/material/icon";
+import { Subscription } from "rxjs";
 import { Post } from "../../core/models/models";
 import { PostService } from "../../core/services/post.service";
 import { MediaService } from "../../core/services/media.service";
@@ -441,12 +442,14 @@ import { AudioPlayerService } from "../../core/services/audio-player.service";
             <div
               class="viz-circle"
               [class.paused]="
-                audioPlayer.playing?.id !== post.id || !audioPlayer.isPlaying
+                audioPlayer.playing?.id !== post.media.id ||
+                !audioPlayer.isPlaying
               "
               (click)="togglePlay(post)"
             >
               <mat-icon>{{
-                audioPlayer.playing?.id === post.id && audioPlayer.isPlaying
+                audioPlayer.playing?.id === post.media.id &&
+                audioPlayer.isPlaying
                   ? "pause"
                   : "music_note"
               }}</mat-icon>
@@ -455,7 +458,8 @@ import { AudioPlayerService } from "../../core/services/audio-player.service";
             <div
               class="eq-bars"
               [class.paused]="
-                audioPlayer.playing?.id !== post.id || !audioPlayer.isPlaying
+                audioPlayer.playing?.id !== post.media.id ||
+                !audioPlayer.isPlaying
               "
             >
               @for (b of [1, 2, 3, 4, 5, 6, 7]; track b) {
@@ -495,12 +499,12 @@ import { AudioPlayerService } from "../../core/services/audio-player.service";
             <div class="progress-track" (click)="seek($event, post)">
               <div
                 class="progress-fill"
-                [style.width.%]="getProgress(post.id)"
+                [style.width.%]="getProgress(post.media.id)"
               ></div>
-              @if (audioPlayer.playing?.id === post.id) {
+              @if (audioPlayer.playing?.id === post.media.id) {
                 <div
                   class="progress-thumb"
-                  [style.left.%]="getProgress(post.id)"
+                  [style.left.%]="getProgress(post.media.id)"
                 ></div>
               }
             </div>
@@ -508,17 +512,18 @@ import { AudioPlayerService } from "../../core/services/audio-player.service";
               <button class="ctrl-btn" (click)="jump(-10)">
                 <mat-icon>replay_10</mat-icon>
               </button>
-              <button class="ctrl-btn" (click)="audioPlayer.prevTrack()">
+              <button class="ctrl-btn" (click)="prev()">
                 <mat-icon>skip_previous</mat-icon>
               </button>
               <button class="ctrl-btn play" (click)="togglePlay(post)">
                 <mat-icon>{{
-                  audioPlayer.playing?.id === post.id && audioPlayer.isPlaying
+                  audioPlayer.playing?.id === post.media.id &&
+                  audioPlayer.isPlaying
                     ? "pause"
                     : "play_arrow"
                 }}</mat-icon>
               </button>
-              <button class="ctrl-btn" (click)="audioPlayer.nextTrack()">
+              <button class="ctrl-btn" (click)="next()">
                 <mat-icon>skip_next</mat-icon>
               </button>
               <button class="ctrl-btn" (click)="jump(10)">
@@ -589,6 +594,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   private page = 0;
   private hasMore = true;
+  private subscriptions = new Subscription();
 
   constructor(
     private postService: PostService,
@@ -598,12 +604,23 @@ export class HomeComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.authService.currentUser$.subscribe((u) => (this.userId = u?.id || 0));
+    this.subscriptions.add(
+      this.authService.currentUser$.subscribe(
+        (u) => (this.userId = u?.id || 0),
+      ),
+    );
+    this.subscriptions.add(
+      this.audioPlayer.currentMedia$.subscribe((media) => {
+        if (media?.id) {
+          this.scrollToPostByMediaId(media.id);
+        }
+      }),
+    );
     this.loadMore();
   }
 
   ngOnDestroy() {
-    // Le service gère sa propre destruction
+    this.subscriptions.unsubscribe();
   }
 
   loadMore() {
@@ -624,7 +641,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   togglePlay(post: Post) {
-    if (this.audioPlayer.playing?.id === post.id) {
+    if (this.audioPlayer.playing?.id === post.media.id) {
       this.audioPlayer.toggleAudio();
     } else {
       this.audioPlayer.playMedia(
@@ -638,7 +655,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   seek(e: MouseEvent, post: Post) {
     const bar = e.currentTarget as HTMLElement;
     const ratio = Math.max(0, Math.min(1, e.offsetX / bar.offsetWidth));
-    if (this.audioPlayer.playing?.id === post.id) {
+    if (this.audioPlayer.playing?.id === post.media.id) {
       this.audioPlayer.seek(ratio);
     }
   }
@@ -657,10 +674,12 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   prev(anchorPost?: Post) {
     this.audioPlayer.prevTrack();
+    setTimeout(() => this.scrollToCurrentMedia(), 50);
   }
 
   next(anchorPost?: Post) {
     this.audioPlayer.nextTrack();
+    setTimeout(() => this.scrollToCurrentMedia(), 50);
   }
 
   like(post: Post) {
@@ -696,5 +715,19 @@ export class HomeComponent implements OnInit, OnDestroy {
       const element = document.getElementById(`post-${postId}`);
       element?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
+  }
+
+  private scrollToPostByMediaId(mediaId: number): void {
+    const post = this.posts.find((p) => p.media.id === mediaId);
+    if (post) {
+      this.scrollToPost(post.id);
+    }
+  }
+
+  private scrollToCurrentMedia(): void {
+    const mediaId = this.audioPlayer.playing?.id;
+    if (mediaId) {
+      this.scrollToPostByMediaId(mediaId);
+    }
   }
 }
