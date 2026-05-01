@@ -1,6 +1,7 @@
 package com.drkindo.controller;
 
 import com.drkindo.model.*;
+import com.drkindo.dto.PostSearchCriteria;
 import com.drkindo.service.PostService;
 import lombok.*;
 import lombok.RequiredArgsConstructor;
@@ -18,8 +19,9 @@ public class PostController {
     @GetMapping
     public ResponseEntity<Page<Post>> getFeed(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(postService.getFeed(page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String type) {
+        return ResponseEntity.ok(postService.getFeed(page, size, type));
     }
 
     @GetMapping("/user/{userId}")
@@ -34,10 +36,10 @@ public class PostController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<Page<Post>> search(@RequestParam String q,
+    public ResponseEntity<Page<Post>> search(PostSearchCriteria criteria,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(postService.search(q, page, size));
+        return ResponseEntity.ok(postService.searchAdvanced(criteria, page, size));
     }
 
     @PostMapping

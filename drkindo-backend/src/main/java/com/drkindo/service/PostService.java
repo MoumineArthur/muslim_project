@@ -7,6 +7,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.drkindo.dto.PostSearchCriteria;
+import org.springframework.data.jpa.domain.Specification;
+import com.drkindo.repository.PostSpecification;
 
 @Service
 @RequiredArgsConstructor
@@ -22,19 +25,29 @@ public class PostService {
     @Value("${app.admin.username:admin}")
     private String adminUsername;
 
-    public Page<Post> getFeed(int page, int size) {
-        return postRepository.findAll(PageRequest.of(page, size,
+    public Page<Post> getFeed(int page, int size, String typeStr) {
+        Pageable pageable = PageRequest.of(page, size,
                 Sort.by(
-                        Sort.Order.desc("media.contentDate"),
                         Sort.Order.asc("media.sequenceNumber"),
-                        Sort.Order.desc("createdAt"))));
+                        Sort.Order.asc("media.filename"),
+                        Sort.Order.desc("createdAt")));
+
+        if (typeStr != null && !typeStr.isEmpty()) {
+            try {
+                Media.MediaType type = Media.MediaType.valueOf(typeStr.toUpperCase());
+                return postRepository.findByMedia_Type(type, pageable);
+            } catch (IllegalArgumentException e) {
+                // Ignore parsing errors, return all
+            }
+        }
+        return postRepository.findAll(pageable);
     }
 
     public Page<Post> getByUser(Long userId, int page, int size) {
         return postRepository.findByAuthorId(userId, PageRequest.of(page, size,
                 Sort.by(
-                        Sort.Order.desc("media.contentDate"),
                         Sort.Order.asc("media.sequenceNumber"),
+                        Sort.Order.asc("media.filename"),
                         Sort.Order.desc("createdAt"))));
     }
 
@@ -91,6 +104,15 @@ public class PostService {
 
     public Page<Post> search(String q, int page, int size) {
         return postRepository.search(q, PageRequest.of(page, size));
+    }
+
+    public Page<Post> searchAdvanced(PostSearchCriteria criteria, int page, int size) {
+        Specification<Post> spec = PostSpecification.withCriteria(criteria);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(
+                Sort.Order.asc("media.sequenceNumber"),
+                Sort.Order.asc("media.filename"),
+                Sort.Order.desc("createdAt")));
+        return postRepository.findAll(spec, pageable);
     }
 
     @Transactional

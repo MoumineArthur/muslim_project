@@ -8,6 +8,8 @@ import { PostService } from "../../core/services/post.service";
 import { MediaService } from "../../core/services/media.service";
 import { AuthService } from "../../core/services/auth.service";
 import { AudioPlayerService } from "../../core/services/audio-player.service";
+import { FolderService } from "../../core/services/folder.service";
+import { Folder } from "../../core/models/models";
 
 @Component({
   selector: "app-home",
@@ -15,190 +17,209 @@ import { AudioPlayerService } from "../../core/services/audio-player.service";
   imports: [CommonModule, RouterModule, MatIconModule],
   styles: [
     `
-      .feed-wrap {
+      /* ──── Container Global ──── */
+      .page-container {
         height: 100svh;
-        overflow-y: scroll;
-        scroll-snap-type: y mandatory;
+        overflow-y: auto;
         background: var(--bg-primary);
+        padding-bottom: 80px; /* Space for global player & nav */
+        font-family: 'Inter', sans-serif;
       }
 
-      .post-slide {
-        height: 100svh;
-        scroll-snap-align: start;
+      /* ──── Header & Tabs ──── */
+      .header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: rgba(8, 8, 14, 0.95);
+        backdrop-filter: blur(20px);
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      
+      .page-title {
+        font-size: 24px;
+        font-weight: 800;
+        background: linear-gradient(90deg, #a855f7, #ec4899);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 16px;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 12px;
+      }
+
+      .tab-btn {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-secondary);
+        padding: 10px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: center;
+      }
+
+      .tab-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+      }
+
+      .tab-btn.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+        box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+      }
+
+      /* ──── Category Chips ──── */
+      .chips-container {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 0 20px 12px;
+        scrollbar-width: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .chips-container::-webkit-scrollbar {
+        display: none;
+      }
+      .chip {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-secondary);
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .chip:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+      }
+      .chip.active {
+        background: rgba(124, 58, 237, 0.2);
+        color: var(--accent-light);
+        border-color: rgba(124, 58, 237, 0.4);
+      }
+
+      /* ──── Feed List ──── */
+      .feed-list {
+        padding: 16px 20px;
         display: flex;
         flex-direction: column;
+        gap: 16px;
+      }
+
+      .post-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: transform 0.2s ease, background 0.2s ease;
+      }
+
+      .post-card:hover {
+        background: rgba(255, 255, 255, 0.06);
+        transform: translateY(-2px);
+      }
+
+      .post-card.active-playing {
+        border-color: rgba(124, 58, 237, 0.5);
+        background: rgba(124, 58, 237, 0.05);
+        box-shadow: 0 0 20px rgba(124, 58, 237, 0.1);
+      }
+
+      /* Row 1: Image + Info */
+      .post-header {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .post-thumb {
+        width: 80px;
+        height: 80px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #4c1d95, #9d174d);
+        display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
         position: relative;
         overflow: hidden;
       }
+      
+      .post-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
 
-      /* Fond dynamique par post */
-      .post-slide::before {
-        content: "";
+      .play-overlay {
         position: absolute;
         inset: 0;
-        background: radial-gradient(
-          ellipse at 50% 40%,
-          rgba(124, 58, 237, 0.18) 0%,
-          transparent 70%
-        );
-        pointer-events: none;
-      }
-
-      /* ──── Visualiseur ──── */
-      .viz-container {
-        position: relative;
-        width: 200px;
-        height: 200px;
-        margin-bottom: 28px;
-      }
-
-      .viz-ring {
-        position: absolute;
-        inset: 0;
-        border-radius: 50%;
-        border: 2px solid rgba(124, 58, 237, 0.35);
-        animation: expand 2.5s ease-out infinite;
-      }
-      .viz-ring:nth-child(2) {
-        animation-delay: 0.6s;
-      }
-      .viz-ring:nth-child(3) {
-        animation-delay: 1.2s;
-      }
-
-      @keyframes expand {
-        0% {
-          transform: scale(0.85);
-          opacity: 0.8;
-        }
-        100% {
-          transform: scale(1.6);
-          opacity: 0;
-        }
-      }
-
-      .viz-circle {
-        position: absolute;
-        inset: 20px;
-        border-radius: 50%;
-        background: radial-gradient(
-          circle at 40% 40%,
-          #a855f7,
-          #7c3aed 60%,
-          #4c1d95
-        );
+        background: rgba(0, 0, 0, 0.4);
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow:
-          0 0 60px rgba(124, 58, 237, 0.5),
-          0 0 120px rgba(124, 58, 237, 0.2);
-        transition: transform 0.2s;
+        opacity: 0;
+        transition: opacity 0.2s;
+        cursor: pointer;
+      }
+      
+      .post-thumb:hover .play-overlay {
+        opacity: 1;
+      }
+      
+      .play-overlay mat-icon {
+        font-size: 36px;
+        width: 36px;
+        height: 36px;
+        color: white;
+      }
+      
+      .post-thumb.active-playing .play-overlay {
+        opacity: 1;
+        background: rgba(124, 58, 237, 0.5);
       }
 
-      .viz-circle.paused {
-        animation: none;
-        filter: saturate(0.4);
-      }
-      .viz-circle mat-icon {
-        font-size: 56px;
-        color: rgba(255, 255, 255, 0.9);
-      }
-
-      /* Bars EQ animées */
-      .eq-bars {
-        display: flex;
-        gap: 4px;
-        align-items: flex-end;
-        height: 30px;
-        position: absolute;
-        bottom: -40px;
-        left: 50%;
-        transform: translateX(-50%);
-      }
-
-      .eq-bar {
-        width: 4px;
-        background: var(--accent-light);
-        border-radius: 2px;
-        animation: eq 1.2s ease-in-out infinite alternate;
-      }
-      .eq-bar:nth-child(1) {
-        height: 12px;
-        animation-delay: 0s;
-      }
-      .eq-bar:nth-child(2) {
-        height: 22px;
-        animation-delay: 0.15s;
-      }
-      .eq-bar:nth-child(3) {
-        height: 30px;
-        animation-delay: 0.3s;
-      }
-      .eq-bar:nth-child(4) {
-        height: 18px;
-        animation-delay: 0.45s;
-      }
-      .eq-bar:nth-child(5) {
-        height: 26px;
-        animation-delay: 0.6s;
-      }
-      .eq-bar:nth-child(6) {
-        height: 14px;
-        animation-delay: 0.75s;
-      }
-      .eq-bar:nth-child(7) {
-        height: 20px;
-        animation-delay: 0.9s;
-      }
-
-      @keyframes eq {
-        from {
-          transform: scaleY(0.3);
-          opacity: 0.5;
-        }
-        to {
-          transform: scaleY(1);
-          opacity: 1;
-        }
-      }
-
-      .eq-bars.paused .eq-bar {
-        animation-play-state: paused;
-      }
-
-      /* ──── Infos ──── */
       .post-info {
-        text-align: center;
-        padding: 0 80px 0 20px;
-        max-width: 380px;
-        width: 100%;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
       }
 
       .post-category {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: rgba(124, 58, 237, 0.2);
-        border: 1px solid rgba(124, 58, 237, 0.4);
-        color: var(--accent-light);
         font-size: 11px;
-        font-weight: 600;
-        padding: 4px 12px;
-        border-radius: 20px;
-        margin-bottom: 10px;
         text-transform: uppercase;
+        color: var(--accent-light);
+        font-weight: 700;
         letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
 
       .post-title {
-        font-size: 15px;
-        font-weight: 700;
-        line-height: 1.4;
+        font-size: 16px;
+        font-weight: 600;
+        color: white;
+        line-height: 1.3;
         margin-bottom: 6px;
-        color: var(--text-primary);
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
@@ -210,139 +231,78 @@ import { AudioPlayerService } from "../../core/services/audio-player.service";
         color: var(--text-secondary);
         display: flex;
         align-items: center;
-        justify-content: center;
         gap: 6px;
       }
 
-      /* ──── Progress + Controls ──── */
-      .player-controls {
-        width: 100%;
-        max-width: 380px;
-        padding: 0 20px 0 20px;
-        margin-top: 28px;
-      }
-
-      .time-row {
-        display: flex;
-        justify-content: space-between;
+      .post-meta {
         font-size: 11px;
-        color: var(--text-secondary);
-        margin-bottom: 6px;
+        color: rgba(255,255,255,0.4);
+        margin-top: 4px;
       }
 
-      .progress-track {
-        width: 100%;
-        height: 3px;
-        background: rgba(255, 255, 255, 0.12);
-        border-radius: 2px;
-        cursor: pointer;
-        margin-bottom: 20px;
-        position: relative;
-      }
-
-      .progress-thumb {
-        position: absolute;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        width: 12px;
-        height: 12px;
-        background: white;
-        border-radius: 50%;
-        box-shadow: 0 0 8px rgba(124, 58, 237, 0.8);
-        transition: left 0.1s linear;
-      }
-
-      .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #7c3aed, #a855f7);
-        border-radius: 2px;
-        transition: width 0.1s linear;
-      }
-
-      .ctrl-row {
+      /* Row 2: Actions */
+      .post-actions {
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 20px;
+        justify-content: space-between;
+        margin-top: 4px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
       }
 
-      .ctrl-btn {
-        background: none;
-        border: none;
-        color: var(--text-secondary);
-        cursor: pointer;
-        border-radius: 50%;
+      .action-group {
         display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 8px;
-        transition: all 0.2s;
-      }
-      .ctrl-btn:hover {
-        color: var(--text-primary);
-        transform: scale(1.1);
-      }
-      .ctrl-btn mat-icon {
-        font-size: 24px;
-      }
-
-      .ctrl-btn.play {
-        background: var(--accent);
-        width: 56px;
-        height: 56px;
-        box-shadow: 0 0 24px rgba(124, 58, 237, 0.5);
-        color: white;
-      }
-      .ctrl-btn.play mat-icon {
-        font-size: 28px;
-      }
-      .ctrl-btn.play:hover {
-        background: var(--accent-light);
-        transform: scale(1.05);
-      }
-
-      /* ──── Actions latérales ──── */
-      .side-actions {
-        position: absolute;
-        right: 14px;
-        bottom: 100px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 20px;
+        gap: 16px;
       }
 
       .action-btn {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
         display: flex;
-        flex-direction: column;
         align-items: center;
-        gap: 3px;
-        background: rgba(255, 255, 255, 0.07);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        color: white;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 500;
         cursor: pointer;
-        padding: 10px;
-        border-radius: 50%;
-        font-size: 10px;
-        font-weight: 600;
+        padding: 4px;
+        border-radius: 6px;
         transition: all 0.2s;
-        min-width: 46px;
+      }
+
+      .action-btn:hover {
+        color: white;
+        background: rgba(255, 255, 255, 0.05);
       }
 
       .action-btn mat-icon {
-        font-size: 22px;
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
       }
-      .action-btn:hover,
-      .action-btn.liked {
-        background: rgba(124, 58, 237, 0.25);
-        border-color: rgba(124, 58, 237, 0.4);
-      }
-      .action-btn.liked mat-icon {
-        color: #f472b6;
-      }
+
       .action-btn.liked {
         color: #f472b6;
+      }
+
+      .play-main-btn {
+        background: var(--accent);
+        border: none;
+        color: white;
+        border-radius: 20px;
+        padding: 6px 16px;
+        font-size: 12px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .play-main-btn:hover {
+        background: var(--accent-light);
+        transform: scale(1.05);
       }
 
       /* ──── Nav ──── */
@@ -392,205 +352,194 @@ import { AudioPlayerService } from "../../core/services/audio-player.service";
         color: white !important;
         box-shadow: 0 0 16px rgba(124, 58, 237, 0.4);
       }
-      .nav-upload mat-icon {
-        font-size: 22px;
-      }
 
-      /* ──── Loader ──── */
+      /* ──── Loaders & Empty ──── */
       @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
+        to { transform: rotate(360deg); }
       }
       .spinner {
         animation: spin 1s linear infinite;
       }
-
-      /* ──── Empty ──── */
       .empty-state {
-        height: 100svh;
+        padding: 60px 20px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         gap: 16px;
         color: var(--text-secondary);
+        text-align: center;
       }
       .empty-state mat-icon {
         font-size: 64px;
+        width: 64px;
+        height: 64px;
         opacity: 0.3;
       }
     `,
   ],
   template: `
-    <div class="feed-wrap" (scroll)="onScroll($event)">
-      @if (loading && posts.length === 0) {
-        <div class="empty-state">
-          <mat-icon class="spinner">autorenew</mat-icon>
-          <p>Chargement du feed…</p>
-        </div>
-      }
-
-      @for (post of posts; track post.id; let i = $index) {
-        <div class="post-slide" [id]="'post-' + post.id">
-          <!-- Visualiseur central -->
-          <div class="viz-container">
-            <div class="viz-ring"></div>
-            <div class="viz-ring"></div>
-            <div class="viz-ring"></div>
-
-            <div
-              class="viz-circle"
-              [class.paused]="
-                audioPlayer.playing?.id !== post.media.id ||
-                !audioPlayer.isPlaying
-              "
-              (click)="togglePlay(post)"
-            >
-              <mat-icon>{{
-                audioPlayer.playing?.id === post.media.id &&
-                audioPlayer.isPlaying
-                  ? "pause"
-                  : "music_note"
-              }}</mat-icon>
-            </div>
-
-            <div
-              class="eq-bars"
-              [class.paused]="
-                audioPlayer.playing?.id !== post.media.id ||
-                !audioPlayer.isPlaying
-              "
-            >
-              @for (b of [1, 2, 3, 4, 5, 6, 7]; track b) {
-                <div class="eq-bar"></div>
-              }
-            </div>
-          </div>
-
-          <!-- Infos -->
-          <div class="post-info" style="margin-top:52px">
-            <div class="post-category">
-              <mat-icon style="font-size:12px">folder</mat-icon>
-              {{ post.media.folder?.name || "DrKindo" }}
-            </div>
-            <div class="post-title">
-              {{ post.title || post.media.filename }}
-            </div>
-            <div class="post-author">
-              <mat-icon style="font-size:14px">account_circle</mat-icon>
-              {{ post.author.name }}
-              @if (post.description) {
-                <span>·</span>
-                <span
-                  style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px"
-                  >{{ post.description }}</span
-                >
-              }
-            </div>
-          </div>
-
-          <!-- Player -->
-          <div class="player-controls">
-            <div class="time-row">
-              <span>{{ formatTime(audioPlayer.currentTime) }}</span>
-              <span>{{ formatTime(audioPlayer.duration) }}</span>
-            </div>
-            <div class="progress-track" (click)="seek($event, post)">
-              <div
-                class="progress-fill"
-                [style.width.%]="getProgress(post.media.id)"
-              ></div>
-              @if (audioPlayer.playing?.id === post.media.id) {
-                <div
-                  class="progress-thumb"
-                  [style.left.%]="getProgress(post.media.id)"
-                ></div>
-              }
-            </div>
-            <div class="ctrl-row">
-              <button class="ctrl-btn" (click)="jump(-10)">
-                <mat-icon>replay_10</mat-icon>
-              </button>
-              <button class="ctrl-btn" (click)="prev()">
-                <mat-icon>skip_previous</mat-icon>
-              </button>
-              <button class="ctrl-btn play" (click)="togglePlay(post)">
-                <mat-icon>{{
-                  audioPlayer.playing?.id === post.media.id &&
-                  audioPlayer.isPlaying
-                    ? "pause"
-                    : "play_arrow"
-                }}</mat-icon>
-              </button>
-              <button class="ctrl-btn" (click)="next()">
-                <mat-icon>skip_next</mat-icon>
-              </button>
-              <button class="ctrl-btn" (click)="jump(10)">
-                <mat-icon>forward_10</mat-icon>
-              </button>
-            </div>
-          </div>
-
-          <!-- Actions latérales -->
-          <div class="side-actions">
-            <button
-              class="action-btn"
-              [class.liked]="post.liked"
-              (click)="like(post)"
-            >
-              <mat-icon>{{
-                post.liked ? "favorite" : "favorite_border"
-              }}</mat-icon>
-              <span>{{ post.likesCount || 0 }}</span>
-            </button>
-            <button class="action-btn">
-              <mat-icon>chat_bubble_outline</mat-icon>
-              <span>0</span>
-            </button>
-            <button class="action-btn">
-              <mat-icon>share</mat-icon>
-            </button>
-            <button class="action-btn">
-              <mat-icon>more_horiz</mat-icon>
-            </button>
-          </div>
-        </div>
-      }
-
-      @if (loading && posts.length > 0) {
-        <div
-          style="height:60px;display:flex;align-items:center;justify-content:center"
-        >
-          <mat-icon class="spinner" style="color:var(--text-secondary)"
-            >autorenew</mat-icon
+    <div class="page-container" (scroll)="onScroll($event)">
+      <!-- Header -->
+      <div class="header">
+        <h1 class="page-title">Découverte</h1>
+        <div class="tabs">
+          <button 
+            class="tab-btn" 
+            [class.active]="activeTab === 'AUDIO'"
+            (click)="switchTab('AUDIO')"
           >
+            Podcasts Audio
+          </button>
+          <button 
+            class="tab-btn" 
+            [class.active]="activeTab === 'VIDEO'"
+            (click)="switchTab('VIDEO')"
+          >
+            Vidéos
+          </button>
         </div>
-      }
+      </div>
+
+      <!-- Category Chips -->
+      <div class="chips-container">
+        <button class="chip" [class.active]="selectedFolderId === null" (click)="selectFolder(null)">
+          Toutes
+        </button>
+        @for (folder of folders; track folder.id) {
+          <button class="chip" [class.active]="selectedFolderId === folder.id" (click)="selectFolder(folder.id)">
+            {{ folder.name }}
+          </button>
+        }
+      </div>
+
+      <!-- Feed List -->
+      <div class="feed-list">
+        @if (loading && posts.length === 0) {
+          <div class="empty-state">
+            <mat-icon class="spinner">autorenew</mat-icon>
+            <p>Chargement en cours…</p>
+          </div>
+        }
+
+        @for (post of posts; track post.id; let i = $index) {
+          <div class="post-card" [class.active-playing]="audioPlayer.playing?.id === post.media.id">
+            
+            <div class="post-header" (click)="togglePlay(post)" style="cursor: pointer;">
+              <div class="post-thumb" [class.active-playing]="audioPlayer.playing?.id === post.media.id && audioPlayer.isPlaying">
+                <!-- Fallback thumbnail if none available -->
+                <mat-icon *ngIf="!getMediaThumbnail(post.media) || getMediaThumbnail(post.media) === 'assets/default-thumbnail.png'" style="font-size: 40px; width:40px; height:40px; opacity:0.5; color:white;">
+                  {{ activeTab === 'VIDEO' ? 'videocam' : 'music_note' }}
+                </mat-icon>
+                <img *ngIf="getMediaThumbnail(post.media) && getMediaThumbnail(post.media) !== 'assets/default-thumbnail.png'" [src]="getMediaThumbnail(post.media)" alt="" />
+                
+                <div class="play-overlay">
+                  <mat-icon>{{ audioPlayer.playing?.id === post.media.id && audioPlayer.isPlaying ? 'pause' : 'play_arrow' }}</mat-icon>
+                </div>
+              </div>
+
+              <div class="post-info">
+                <div class="post-category">
+                  <mat-icon style="font-size:12px; width:12px; height:12px">folder</mat-icon>
+                  {{ post.media.folder?.name || "DrKindo" }}
+                </div>
+                <div class="post-title">
+                  {{ post.title || post.media.filename }}
+                </div>
+                <div class="post-author">
+                  <mat-icon style="font-size:14px; width:14px; height:14px">account_circle</mat-icon>
+                  {{ post.author.name }}
+                </div>
+                <div class="post-meta">
+                  {{ formatTime(post.media.duration || 0) }} • {{ post.likesCount || 0 }} J'aime
+                </div>
+              </div>
+            </div>
+
+            <div class="post-actions">
+              <button class="play-main-btn" (click)="togglePlay(post)">
+                <mat-icon style="font-size:18px; width:18px; height:18px">
+                  {{ audioPlayer.playing?.id === post.media.id && audioPlayer.isPlaying ? 'pause' : 'play_arrow' }}
+                </mat-icon>
+                {{ audioPlayer.playing?.id === post.media.id && audioPlayer.isPlaying ? 'Pause' : 'Écouter' }}
+              </button>
+
+              <div class="action-group">
+                <button class="action-btn" [class.liked]="post.liked" (click)="like(post)">
+                  <mat-icon>{{ post.liked ? 'favorite' : 'favorite_border' }}</mat-icon>
+                  <span>{{ post.likesCount || 0 }}</span>
+                </button>
+                <button class="action-btn" (click)="addToPlaylist(post)" title="Ajouter à la playlist">
+                  <mat-icon>playlist_add</mat-icon>
+                </button>
+                <button class="action-btn" (click)="watchLater(post)" title="À regarder plus tard">
+                  <mat-icon>watch_later</mat-icon>
+                </button>
+                <button class="action-btn" title="Partager">
+                  <mat-icon>share</mat-icon>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        }
+
+        @if (posts.length === 0 && !loading) {
+          <div class="empty-state">
+            <mat-icon>mic_off</mat-icon>
+            <p>Aucun contenu trouvé pour le moment.</p>
+          </div>
+        }
+
+        @if (loading && posts.length > 0) {
+          <div style="display:flex; justify-content:center; padding: 20px 0;">
+            <mat-icon class="spinner" style="color:var(--text-secondary)">autorenew</mat-icon>
+          </div>
+        }
+      </div>
     </div>
 
     <!-- Barre de navigation -->
     <nav class="bottom-nav">
-      <a class="nav-btn active" routerLink="/home"
-        ><mat-icon>home</mat-icon>Feed</a
-      >
-      <a class="nav-btn" routerLink="/explorer"
-        ><mat-icon>explore</mat-icon>Explorer</a
-      >
-      <a class="nav-btn nav-upload" routerLink="/upload"
-        ><mat-icon>add</mat-icon></a
-      >
-      <a class="nav-btn" routerLink="/live"><mat-icon>radio</mat-icon>Live</a>
-      <a class="nav-btn" [routerLink]="['/profile', userId]"
-        ><mat-icon>person_outline</mat-icon>Profil</a
-      >
+      <a class="nav-btn active" routerLink="/home">
+        <mat-icon>home</mat-icon>
+        Accueil
+      </a>
+      <a class="nav-btn" routerLink="/explorer">
+        <mat-icon>explore</mat-icon>
+        Explorer
+      </a>
+      
+      @if (isMediaUser()) {
+        <a class="nav-btn nav-upload" routerLink="/upload">
+          <mat-icon>add</mat-icon>
+        </a>
+      }
+      
+      @if (isMediaUser()) {
+        <a class="nav-btn" routerLink="/live">
+          <mat-icon>radio</mat-icon>
+          Live
+        </a>
+      }
+      
+      <a class="nav-btn" [routerLink]="['/profile', userId]">
+        <mat-icon>person_outline</mat-icon>
+        Profil
+      </a>
     </nav>
   `,
 })
 export class HomeComponent implements OnInit, OnDestroy {
   posts: Post[] = [];
+  folders: Folder[] = [];
+  playlist: Post[] = [];
   loading = false;
   userId = 0;
+  currentUser: any = null;
+
+  activeTab: 'AUDIO' | 'VIDEO' = 'AUDIO';
+  selectedFolderId: number | null = null;
 
   private page = 0;
   private hasMore = true;
@@ -601,21 +550,20 @@ export class HomeComponent implements OnInit, OnDestroy {
     private mediaService: MediaService,
     private authService: AuthService,
     public audioPlayer: AudioPlayerService,
+    private folderService: FolderService
   ) {}
 
   ngOnInit() {
     this.subscriptions.add(
-      this.authService.currentUser$.subscribe(
-        (u) => (this.userId = u?.id || 0),
-      ),
-    );
-    this.subscriptions.add(
-      this.audioPlayer.currentMedia$.subscribe((media) => {
-        if (media?.id) {
-          this.scrollToPostByMediaId(media.id);
-        }
+      this.authService.currentUser$.subscribe((u) => {
+        this.userId = u?.id || 0;
+        this.currentUser = u;
       }),
     );
+    this.folderService.getRoots().subscribe(folders => {
+      this.folders = folders;
+    });
+    this.loadPlaylist();
     this.loadMore();
   }
 
@@ -623,10 +571,75 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.subscriptions.unsubscribe();
   }
 
+  switchTab(tab: 'AUDIO' | 'VIDEO') {
+    if (this.activeTab === tab) return;
+    this.activeTab = tab;
+    this.posts = [];
+    this.page = 0;
+    this.hasMore = true;
+    this.loadMore();
+  }
+
+  selectFolder(folderId: number | null) {
+    if (this.selectedFolderId === folderId) return;
+    this.selectedFolderId = folderId;
+    this.posts = [];
+    this.page = 0;
+    this.hasMore = true;
+    this.loadMore();
+  }
+
+  loadPlaylist() {
+    const savedPlaylist = localStorage.getItem("userPlaylist");
+    if (savedPlaylist) {
+      this.playlist = JSON.parse(savedPlaylist);
+    }
+  }
+
+  savePlaylist() {
+    localStorage.setItem("userPlaylist", JSON.stringify(this.playlist));
+  }
+
+  addToPlaylist(post: Post) {
+    if (!this.playlist.find((p) => p.id === post.id)) {
+      this.playlist.push(post);
+      this.savePlaylist();
+    }
+  }
+
+  removeFromPlaylist(post: Post) {
+    this.playlist = this.playlist.filter((p) => p.id !== post.id);
+    this.savePlaylist();
+  }
+
+  watchLater(post: Post) {
+    const watchLaterList = JSON.parse(
+      localStorage.getItem("watchLater") || "[]",
+    );
+    if (!watchLaterList.find((p: Post) => p.id === post.id)) {
+      watchLaterList.push(post);
+      localStorage.setItem("watchLater", JSON.stringify(watchLaterList));
+    }
+  }
+
+  isMediaUser(): boolean {
+    return this.currentUser?.role === "ADMIN" || this.currentUser?.role === "MEDIA";
+  }
+
+  getMediaThumbnail(media: any): string {
+    return "assets/default-thumbnail.png"; 
+  }
+
   loadMore() {
     if (this.loading || !this.hasMore) return;
     this.loading = true;
-    this.postService.getFeed(this.page).subscribe({
+    
+    const criteria: any = { type: this.activeTab };
+    if (this.selectedFolderId) {
+      criteria.folderId = this.selectedFolderId;
+    }
+
+    this.postService.search(criteria, this.page, 10).subscribe({
       next: (p) => {
         this.posts = [...this.posts, ...p.content];
         this.hasMore = !p.last;
@@ -648,38 +661,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         post.media,
         this.posts.map((p) => p.media),
       );
-      this.scrollToPost(post.id);
     }
-  }
-
-  seek(e: MouseEvent, post: Post) {
-    const bar = e.currentTarget as HTMLElement;
-    const ratio = Math.max(0, Math.min(1, e.offsetX / bar.offsetWidth));
-    if (this.audioPlayer.playing?.id === post.media.id) {
-      this.audioPlayer.seek(ratio);
-    }
-  }
-
-  jump(secs: number) {
-    if (this.audioPlayer.playing) {
-      this.audioPlayer.audio.currentTime = Math.max(
-        0,
-        Math.min(
-          this.audioPlayer.duration,
-          this.audioPlayer.audio.currentTime + secs,
-        ),
-      );
-    }
-  }
-
-  prev(anchorPost?: Post) {
-    this.audioPlayer.prevTrack();
-    setTimeout(() => this.scrollToCurrentMedia(), 50);
-  }
-
-  next(anchorPost?: Post) {
-    this.audioPlayer.nextTrack();
-    setTimeout(() => this.scrollToCurrentMedia(), 50);
   }
 
   like(post: Post) {
@@ -689,45 +671,17 @@ export class HomeComponent implements OnInit, OnDestroy {
     });
   }
 
-  getProgress(id: number) {
-    if (this.audioPlayer.playing?.id === id) {
-      return this.audioPlayer.miniProgress;
-    }
-    return 0;
-  }
-
   formatTime(s: number): string {
     if (!s || isNaN(s)) return "0:00";
     const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60)
-      .toString()
-      .padStart(2, "0");
+    const sec = Math.floor(s % 60).toString().padStart(2, "0");
     return `${m}:${sec}`;
   }
 
   onScroll(e: Event) {
     const el = e.target as HTMLElement;
-    if (el.scrollHeight - el.scrollTop < el.clientHeight + 300) this.loadMore();
-  }
-
-  private scrollToPost(postId: number): void {
-    setTimeout(() => {
-      const element = document.getElementById(`post-${postId}`);
-      element?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-  }
-
-  private scrollToPostByMediaId(mediaId: number): void {
-    const post = this.posts.find((p) => p.media.id === mediaId);
-    if (post) {
-      this.scrollToPost(post.id);
-    }
-  }
-
-  private scrollToCurrentMedia(): void {
-    const mediaId = this.audioPlayer.playing?.id;
-    if (mediaId) {
-      this.scrollToPostByMediaId(mediaId);
+    if (el.scrollHeight - el.scrollTop < el.clientHeight + 150) {
+      this.loadMore();
     }
   }
 }

@@ -105,10 +105,23 @@ public class MediaAnalyzerService {
             suggestedAuthor = authorRepository.findByNameIgnoreCase(authorName).orElse(null);
         }
 
+        String pathAndName = media.getFolder() != null 
+            ? (media.getFolder().getPath() + " " + media.getFolder().getName()).toUpperCase() 
+            : media.getPath().toUpperCase();
+        
+        List<String> tags = new java.util.ArrayList<>();
+        if (pathAndName.contains("TAFSIR")) {
+            tags.add("TAFSIR");
+        } else if (pathAndName.contains("FATWA")) {
+            tags.add("FATWA");
+        } else {
+            tags.add("DOUROUS");
+        }
+
         return Map.of(
                 "title", title,
                 "author", suggestedAuthor != null ? suggestedAuthor : "",
-                "tags", media.getFolder() != null ? List.of(media.getFolder().getName()) : List.of());
+                "tags", tags);
     }
 
     public String extractAuthorName(Media media) {

@@ -9,8 +9,10 @@ export class PostService {
 
   constructor(private http: HttpClient) {}
 
-  getFeed(page = 0, size = 10): Observable<Page<Post>> {
-    return this.http.get<Page<Post>>(this.apiUrl, { params: { page, size } });
+  getFeed(page = 0, size = 10, type?: string): Observable<Page<Post>> {
+    const params: any = { page, size };
+    if (type) params.type = type;
+    return this.http.get<Page<Post>>(this.apiUrl, { params });
   }
 
   getByUser(userId: number, page = 0, size = 10): Observable<Page<Post>> {
@@ -25,8 +27,14 @@ export class PostService {
     return this.http.get<any>(`${this.apiUrl}/suggest/${mediaId}`);
   }
 
-  search(q: string, page = 0, size = 10): Observable<Page<Post>> {
-    return this.http.get<Page<Post>>(`${this.apiUrl}/search`, { params: { q, page, size } });
+  search(criteria: any, page = 0, size = 10): Observable<Page<Post>> {
+    const params: any = { page, size };
+    if (criteria.query) params.query = criteria.query;
+    if (criteria.year) params.year = criteria.year;
+    if (criteria.authorId) params.authorId = criteria.authorId;
+    if (criteria.folderId) params.folderId = criteria.folderId;
+    if (criteria.type) params.type = criteria.type;
+    return this.http.get<Page<Post>>(`${this.apiUrl}/search`, { params });
   }
 
   toggleLike(postId: number): Observable<{ liked: boolean; count: number }> {

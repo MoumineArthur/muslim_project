@@ -263,7 +263,7 @@ import { Router } from "@angular/router";
     `,
   ],
   template: `
-    @if (player.playing && player.currentRoute !== "home") {
+    @if (player.playing) {
       <div
         class="mini-player"
         [class.minimized]="player.minimized"

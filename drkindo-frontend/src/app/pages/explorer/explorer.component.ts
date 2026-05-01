@@ -10,6 +10,8 @@ import { MediaService } from "../../core/services/media.service";
 import { AudioPlayerService } from "../../core/services/audio-player.service";
 import { FolderService } from "../../core/services/folder.service";
 import { AuthorService } from "../../core/services/author.service";
+import { PostService } from "../../core/services/post.service";
+import { Post } from "../../core/models/models";
 
 @Component({
   selector: "app-explorer",
@@ -500,46 +502,40 @@ import { AuthorService } from "../../core/services/author.service";
       </div>
 
       <div class="filters-row">
-        <select class="filter-input" [(ngModel)]="selectedAuthor">
-          <option value="">Tous les auteurs</option>
-          @for (author of authors; track author.id) {
-            <option [value]="author.name">{{ author.name }}</option>
+        <select
+          class="filter-input"
+          [(ngModel)]="selectedFolderId"
+          (change)="triggerAdvancedSearch()"
+        >
+          <option [ngValue]="null">Toutes les catégories</option>
+          @for (f of allFolders; track f.id) {
+            <option [ngValue]="f.id">{{ f.name }}</option>
           }
         </select>
 
-        <select class="filter-input" [(ngModel)]="dateFilterMode">
-          <option value="">Toutes les dates</option>
-          <option value="year">Par annee</option>
-          <option value="month">Par mois</option>
-          <option value="day">Date complete</option>
+        <select
+          class="filter-input"
+          [(ngModel)]="selectedAuthorId"
+          (change)="triggerAdvancedSearch()"
+        >
+          <option [ngValue]="null">Tous les auteurs</option>
+          @for (author of authors; track author.id) {
+            <option [ngValue]="author.id">{{ author.name }}</option>
+          }
         </select>
 
-        @if (dateFilterMode === "year") {
-          <input
-            class="filter-input"
-            type="number"
-            min="1900"
-            max="2100"
-            placeholder="2024"
-            [(ngModel)]="yearFilter"
-          />
-        }
-
-        @if (dateFilterMode === "month") {
-          <input
-            class="filter-input"
-            type="month"
-            [(ngModel)]="monthFilter"
-          />
-        }
-
-        @if (dateFilterMode === "day") {
-          <input
-            class="filter-input"
-            type="date"
-            [(ngModel)]="dayFilter"
-          />
-        }
+        <select
+          class="filter-input"
+          [(ngModel)]="selectedYear"
+          (change)="triggerAdvancedSearch()"
+        >
+          <option [ngValue]="null">Toutes les années</option>
+          <option [ngValue]="2025">2025</option>
+          <option [ngValue]="2024">2024</option>
+          <option [ngValue]="2023">2023</option>
+          <option [ngValue]="2022">2022</option>
+          <option [ngValue]="2021">2021</option>
+        </select>
 
         @if (hasActiveFilters()) {
           <button class="filter-input" (click)="clearFilters()">
@@ -567,50 +563,49 @@ import { AuthorService } from "../../core/services/author.service";
     <!--─── CONTENU ───────────────────────────────────────────────────────────-->
     <div class="content" [style.padding-top]="headerHeight + 'px'">
       <!--── RÉSULTATS DE RECHERCHE ──────────────────────────────────────────-->
-      @if (searchQuery) {
+      @if (searchQuery || hasActiveFilters()) {
         <div class="section-header">
-          <span class="section-title">Résultats</span>
-          <span class="section-count"
-            >{{ filteredSearchResults.length }} fichier(s)</span
-          >
+          <span class="section-title">Résultats de la recherche</span>
+          <span class="section-count">{{ searchResults.length }} post(s)</span>
         </div>
 
-        @if (filteredSearchResults.length === 0 && !searching) {
+        @if (searchResults.length === 0 && !searching) {
           <div
             style="text-align:center;padding:48px 24px;color:var(--text-secondary)"
           >
             <mat-icon style="font-size:48px;opacity:.3">search_off</mat-icon>
-            <p style="margin-top:12px;font-size:14px">
-              Aucun résultat pour "{{ searchQuery }}"
-            </p>
+            <p style="margin-top:12px;font-size:14px">Aucun résultat trouvé.</p>
           </div>
         }
 
         <div class="files-list">
-          @for (m of filteredSearchResults; track m.id) {
+          @for (post of searchResults; track post.id) {
             <div
               class="file-row"
-              [id]="'media-' + m.id"
-              [class.active]="player.playing?.id === m.id"
-              (click)="playMedia(m)"
+              [id]="'media-' + post.media.id"
+              [class.active]="player.playing?.id === post.media.id"
+              (click)="playPost(post)"
             >
               <div class="file-thumb">
                 <mat-icon>{{
-                  m.type === "VIDEO" ? "videocam" : "music_note"
+                  post.media.type === "VIDEO" ? "videocam" : "music_note"
                 }}</mat-icon>
               </div>
               <div class="file-info">
-                <div class="file-name">{{ m.filename }}</div>
+                <div class="file-name">
+                  {{ post.title || post.media.filename }}
+                </div>
                 <div class="file-sub">
-                  {{ m.folder?.name || "—" }} · {{ formatSize(m.size) }}
+                  {{ post.author.name || "Inconnu" }} ·
+                  {{ post.media.folder?.name || "—" }}
                 </div>
               </div>
               <button
                 class="file-play"
-                (click)="$event.stopPropagation(); playMedia(m)"
+                (click)="$event.stopPropagation(); playPost(post)"
               >
                 <mat-icon>{{
-                  player.playing?.id === m.id && player.isPlaying
+                  player.playing?.id === post.media.id && player.isPlaying
                     ? "pause_circle"
                     : "play_circle"
                 }}</mat-icon>
@@ -618,7 +613,7 @@ import { AuthorService } from "../../core/services/author.service";
             </div>
           }
         </div>
-      } @else {
+      } @else if (!searchQuery && !hasActiveFilters()) {
         <!--── DOSSIERS ──────────────────────────────────────────────────────-->
         @if (filteredFolders.length > 0) {
           <div class="section-header">
@@ -686,7 +681,9 @@ import { AuthorService } from "../../core/services/author.service";
         @if (filteredMedias.length > 0) {
           <div class="section-header">
             <span class="section-title">Fichiers</span>
-            <span class="section-count">{{ displayedMediaCount }} au total</span>
+            <span class="section-count"
+              >{{ displayedMediaCount }} au total</span
+            >
           </div>
 
           <!-- Vue liste -->
@@ -831,17 +828,17 @@ import { AuthorService } from "../../core/services/author.service";
 export class ExplorerComponent implements OnInit, OnDestroy {
   authors: Author[] = [];
   folders: Folder[] = [];
+  allFolders: Folder[] = []; // For global search dropdown
   medias: Media[] = [];
-  searchResults: Media[] = [];
+  searchResults: Post[] = []; // Now fetching Posts!
   searchQuery = "";
   breadcrumb: Folder[] = [];
   viewMode: "list" | "grid" = "list";
   currentFolderId: number | null = null;
-  selectedAuthor = "";
-  dateFilterMode: "" | "year" | "month" | "day" = "";
-  yearFilter = "";
-  monthFilter = "";
-  dayFilter = "";
+
+  selectedAuthorId: number | null = null;
+  selectedFolderId: number | null = null;
+  selectedYear: number | null = null;
 
   scanning = false;
   resetting = false;
@@ -852,12 +849,13 @@ export class ExplorerComponent implements OnInit, OnDestroy {
   mediaSize = 30;
   mediaTotalCount = 0;
 
-  private searchSubject = new Subject<string>();
+  private searchSubject = new Subject<void>();
 
   constructor(
     private authorService: AuthorService,
     private folderService: FolderService,
     private mediaService: MediaService,
+    private postService: PostService,
     public player: AudioPlayerService,
     private route: ActivatedRoute,
     private router: Router,
@@ -875,10 +873,14 @@ export class ExplorerComponent implements OnInit, OnDestroy {
       },
     });
 
+    this.folderService.getRoots().subscribe((folders) => {
+      this.allFolders = folders;
+    });
+
     // Recherche avec debounce
     this.searchSubject
-      .pipe(debounceTime(350), distinctUntilChanged())
-      .subscribe((q) => (q ? this.doSearch(q) : null));
+      .pipe(debounceTime(350))
+      .subscribe(() => this.doAdvancedSearch());
 
     this.route.queryParams.subscribe((params) => {
       const folderId = params["folderId"];
@@ -974,12 +976,27 @@ export class ExplorerComponent implements OnInit, OnDestroy {
 
   // ── Recherche ────────────────────────────────────────────────────────────
   onSearch(q: string) {
-    this.searchSubject.next(q);
+    this.searchSubject.next();
   }
 
-  doSearch(q: string) {
+  triggerAdvancedSearch() {
+    this.searchSubject.next();
+  }
+
+  doAdvancedSearch() {
+    if (!this.searchQuery && !this.hasActiveFilters()) {
+      this.searchResults = [];
+      return;
+    }
+
     this.searching = true;
-    this.mediaService.search(q, 0, 50).subscribe((p) => {
+    const criteria: any = {};
+    if (this.searchQuery) criteria.query = this.searchQuery;
+    if (this.selectedAuthorId) criteria.authorId = this.selectedAuthorId;
+    if (this.selectedFolderId) criteria.folderId = this.selectedFolderId;
+    if (this.selectedYear) criteria.year = this.selectedYear;
+
+    this.postService.search(criteria, 0, 50).subscribe((p) => {
       this.searchResults = p.content;
       this.searching = false;
     });
@@ -987,46 +1004,46 @@ export class ExplorerComponent implements OnInit, OnDestroy {
 
   clearSearch() {
     this.searchQuery = "";
-    this.searchResults = [];
+    this.doAdvancedSearch();
   }
 
   clearFilters() {
-    this.selectedAuthor = "";
-    this.dateFilterMode = "";
-    this.yearFilter = "";
-    this.monthFilter = "";
-    this.dayFilter = "";
+    this.selectedAuthorId = null;
+    this.selectedFolderId = null;
+    this.selectedYear = null;
+    this.doAdvancedSearch();
   }
 
   get filteredFolders(): Folder[] {
-    return this.folders.filter((folder) => this.matchesFolderFilters(folder));
+    return this.folders;
   }
 
   get filteredMedias(): Media[] {
-    return this.medias.filter((media) => this.matchesMediaFilters(media));
-  }
-
-  get filteredSearchResults(): Media[] {
-    return this.searchResults.filter((media) => this.matchesMediaFilters(media));
+    return this.medias;
   }
 
   get displayedMediaCount(): number {
-    return this.hasActiveFilters() ? this.filteredMedias.length : this.mediaTotalCount;
+    return this.mediaTotalCount;
   }
 
   hasActiveFilters(): boolean {
     return !!(
-      this.selectedAuthor ||
-      this.yearFilter ||
-      this.monthFilter ||
-      this.dayFilter
+      this.selectedAuthorId ||
+      this.selectedFolderId ||
+      this.selectedYear
     );
   }
 
   // ── Player ───────────────────────────────────────────────────────────────
   playMedia(media: Media) {
-    const list = this.searchQuery ? this.filteredSearchResults : this.filteredMedias;
-    this.player.playMedia(media, list);
+    this.player.playMedia(media, this.medias);
+  }
+
+  playPost(post: Post) {
+    this.player.playMedia(
+      post.media,
+      this.searchResults.map((p) => p.media),
+    );
   }
 
   // ── Scan ─────────────────────────────────────────────────────────────────
@@ -1080,7 +1097,7 @@ export class ExplorerComponent implements OnInit, OnDestroy {
   createPost(media: Media, event: Event) {
     event.stopPropagation();
     // Navigate to post editor with mediaId
-    this.router.navigate(['/post/new'], { queryParams: { mediaId: media.id } });
+    this.router.navigate(["/post/new"], { queryParams: { mediaId: media.id } });
   }
 
   publish(media: Media, event: Event) {
@@ -1095,70 +1112,6 @@ export class ExplorerComponent implements OnInit, OnDestroy {
       },
       error: () => alert("Erreur lors de la publication"),
     });
-  }
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  private matchesFolderFilters(folder: Folder): boolean {
-    return (
-      this.matchesAuthor(this.extractFolderAuthor(folder)) &&
-      this.matchesDateParts(this.extractFolderDate(folder))
-    );
-  }
-
-  private matchesMediaFilters(media: Media): boolean {
-    return (
-      this.matchesAuthor(media.detectedAuthor || this.extractAuthorFromText(media.path)) &&
-      this.matchesDateParts({
-        year: media.contentYear,
-        month: media.contentMonth,
-        day: media.contentDay,
-      })
-    );
-  }
-
-  private matchesAuthor(authorName?: string): boolean {
-    if (!this.selectedAuthor) return true;
-    return (authorName || "").toLowerCase() === this.selectedAuthor.toLowerCase();
-  }
-
-  private matchesDateParts(parts: { year?: number; month?: number; day?: number }): boolean {
-    if (!this.dateFilterMode) return true;
-    if (this.dateFilterMode === "year") {
-      return !this.yearFilter || String(parts.year || "") === this.yearFilter;
-    }
-    if (this.dateFilterMode === "month") {
-      if (!this.monthFilter) return true;
-      const [year, month] = this.monthFilter.split("-").map(Number);
-      return parts.year === year && parts.month === month;
-    }
-    if (this.dateFilterMode === "day") {
-      if (!this.dayFilter) return true;
-      const [year, month, day] = this.dayFilter.split("-").map(Number);
-      return parts.year === year && parts.month === month && parts.day === day;
-    }
-    return true;
-  }
-
-  private extractFolderAuthor(folder: Folder): string {
-    return this.extractAuthorFromText(`${folder.path} ${folder.name}`);
-  }
-
-  private extractAuthorFromText(value: string): string {
-    return /\bdr\s*[-_. ]*\s*kindo\b/i.test(value || "") ? "Dr Kindo" : "";
-  }
-
-  private extractFolderDate(folder: Folder): { year?: number; month?: number; day?: number } {
-    const source = `${folder.path} ${folder.name}`;
-    const full = source.match(/\b(19\d{2}|20\d{2})[-_/ .](0?[1-9]|1[0-2])[-_/ .](0?[1-9]|[12]\d|3[01])\b/);
-    if (full) {
-      return { year: Number(full[1]), month: Number(full[2]), day: Number(full[3]) };
-    }
-    const yearMonth = source.match(/\b(19\d{2}|20\d{2})[-_/ .](0?[1-9]|1[0-2])\b/);
-    if (yearMonth) {
-      return { year: Number(yearMonth[1]), month: Number(yearMonth[2]) };
-    }
-    const year = source.match(/\b(19\d{2}|20\d{2})\b/);
-    return year ? { year: Number(year[1]) } : {};
   }
 
   formatSize(bytes: number): string {

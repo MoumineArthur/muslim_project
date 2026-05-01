@@ -4,7 +4,7 @@ export interface User {
   email: string;
   avatar?: string;
   bio?: string;
-  role: 'USER' | 'ADMIN';
+  role: 'USER' | 'ADMIN' | 'MEDIA';
 }
 
 export interface Author {

@@ -47,6 +47,6 @@ public class User {
     private List<Like> likes;
 
     public enum Role {
-        USER, ADMIN
+        USER, ADMIN, MEDIA
     }
 }
